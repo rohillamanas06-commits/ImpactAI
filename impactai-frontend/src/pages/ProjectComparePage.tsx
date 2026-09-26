@@ -31,6 +31,9 @@ export function ProjectComparePage() {
 
   const latestRef = useRef<HTMLDivElement | null>(null);
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+
   // scroll newest result into view after a new compare
   useEffect(() => {
     if (latestId && latestRef.current) {
@@ -45,6 +48,32 @@ export function ProjectComparePage() {
     setBefore(null);
     setAfter(null);
     setCompareError(null);
+  }
+
+  async function handleDeleteComparison(id: string) {
+    if (!window.confirm('Delete this comparison from history?')) return;
+    setDeletingId(id);
+    try {
+      await compareApi.remove(id);
+      await refetchHistory();
+    } catch (err) {
+      setCompareError(err instanceof ApiError ? err.message : 'Failed to delete comparison');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleClearAll() {
+    if (!window.confirm('Delete all comparisons history for this project? This cannot be undone.')) return;
+    setClearing(true);
+    try {
+      await compareApi.clearAll(project.id);
+      await refetchHistory();
+    } catch (err) {
+      setCompareError(err instanceof ApiError ? err.message : 'Failed to clear comparisons');
+    } finally {
+      setClearing(false);
+    }
   }
 
   async function runCompare() {
@@ -140,9 +169,24 @@ export function ProjectComparePage() {
 
       {/* ── History — always shown, persists across tab switches & restarts ── */}
       <div>
-        <h2 className="mb-4 font-serif text-lg text-ink">
-          {historyLoading ? 'Loading comparisons…' : history && history.length > 0 ? 'Comparisons' : 'No comparisons yet'}
-        </h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-serif text-lg text-ink">
+            {historyLoading
+              ? 'Loading comparisons…'
+              : history && history.length > 0
+                ? `Comparisons (${history.length})`
+                : 'No comparisons yet'}
+          </h2>
+          {history && history.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              disabled={clearing}
+              className="text-xs text-danger hover:underline disabled:opacity-50"
+            >
+              {clearing ? 'Clearing…' : 'Clear all history'}
+            </button>
+          )}
+        </div>
 
         {historyLoading && <Spinner label="Loading history…" />}
 
@@ -159,6 +203,8 @@ export function ProjectComparePage() {
                 key={c.id}
                 comparison={c}
                 isLatest={c.id === latestId}
+                isDeleting={deletingId === c.id}
+                onDelete={() => handleDeleteComparison(c.id)}
                 ref={c.id === latestId ? latestRef : null}
               />
             ))}
@@ -174,32 +220,60 @@ export function ProjectComparePage() {
 interface ComparisonCardProps {
   comparison: CompareResponse;
   isLatest: boolean;
+  isDeleting?: boolean;
+  onDelete?: () => void;
   ref?: React.Ref<HTMLDivElement>;
 }
 
 const ComparisonCard = React.forwardRef<HTMLDivElement, Omit<ComparisonCardProps, 'ref'>>(
-  ({ comparison: c, isLatest }, ref) => (
+  ({ comparison: c, isLatest, isDeleting = false, onDelete }, ref) => (
     <div
       ref={ref}
-      className={`rounded-xl border bg-surface p-5 transition-all ${
+      className={`relative rounded-xl border bg-surface p-5 transition-all ${
         isLatest ? 'border-clay shadow-md' : 'border-border'
       }`}
     >
-      {isLatest && (
-        <span className="mb-3 inline-block rounded-full bg-clay px-2 py-0.5 text-xs font-semibold text-white">
-          Latest
-        </span>
-      )}
+      <div className="mb-3 flex items-center justify-between">
+        {isLatest ? (
+          <span className="inline-block rounded-full bg-clay px-2 py-0.5 text-xs font-semibold text-white">
+            Latest
+          </span>
+        ) : (
+          <span className="text-xs text-ink-muted">{formatDate(c.created_at)}</span>
+        )}
+
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isDeleting}
+            title="Delete this comparison"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-ink-muted hover:bg-danger-soft hover:text-danger disabled:opacity-50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+            <span>{isDeleting ? 'Deleting…' : 'Delete'}</span>
+          </button>
+        )}
+      </div>
 
       {/* Before / After images */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">Before</p>
-          <img
-            src={c.media_before.thumbnail_url ?? c.media_before.secure_url}
-            alt="Before"
-            className="h-36 w-full rounded-lg object-cover"
-          />
+          <div className="h-44 w-full overflow-hidden rounded-lg bg-black/5">
+            <img
+              src={c.media_before.thumbnail_url ?? c.media_before.secure_url}
+              alt="Before"
+              className="block h-full w-full object-cover"
+            />
+          </div>
           <Link
             to={`/media/${c.media_before.id}`}
             className="mt-1 block truncate text-xs text-ink-muted hover:text-clay"
@@ -209,11 +283,13 @@ const ComparisonCard = React.forwardRef<HTMLDivElement, Omit<ComparisonCardProps
         </div>
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">After</p>
-          <img
-            src={c.media_after.thumbnail_url ?? c.media_after.secure_url}
-            alt="After"
-            className="h-36 w-full rounded-lg object-cover"
-          />
+          <div className="h-44 w-full overflow-hidden rounded-lg bg-black/5">
+            <img
+              src={c.media_after.thumbnail_url ?? c.media_after.secure_url}
+              alt="After"
+              className="block h-full w-full object-cover"
+            />
+          </div>
           <Link
             to={`/media/${c.media_after.id}`}
             className="mt-1 block truncate text-xs text-ink-muted hover:text-clay"
@@ -235,10 +311,11 @@ const ComparisonCard = React.forwardRef<HTMLDivElement, Omit<ComparisonCardProps
         </ul>
       )}
 
-      <p className="mt-3 text-xs text-ink-muted">{formatDate(c.created_at)}</p>
+      {isLatest && <p className="mt-3 text-xs text-ink-muted">{formatDate(c.created_at)}</p>}
     </div>
   ),
 );
+
 ComparisonCard.displayName = 'ComparisonCard';
 
 /* ── Step badge ── */

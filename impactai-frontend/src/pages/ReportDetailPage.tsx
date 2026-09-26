@@ -1,17 +1,33 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { reportsApi } from '../api/reports';
 import { useAsync } from '../hooks/useAsync';
 import { useProjectContext } from '../hooks/useProjectContext';
 import { Badge } from '../components/Badge';
 import { StatCard } from '../components/StatCard';
+import { Button } from '../components/Button';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { formatDate, formatDateTime } from '../utils/format';
 
 export function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>();
+  const navigate = useNavigate();
   const { project } = useProjectContext();
   const { data: report, loading, error } = useAsync(() => reportsApi.get(reportId!), [reportId]);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!report || !window.confirm(`Are you sure you want to delete "${report.title}"?`)) return;
+    setDeleting(true);
+    try {
+      await reportsApi.remove(report.id);
+      navigate(`/projects/${project.id}/reports`);
+    } catch {
+      alert('Could not delete report.');
+      setDeleting(false);
+    }
+  }
 
   if (loading) return <Spinner label="Loading report…" />;
   if (error) return <ErrorBanner message={error} />;
@@ -21,18 +37,24 @@ export function ReportDetailPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <Link to={`/projects/${project.id}/reports`} className="text-xs text-ink-muted hover:text-clay">
-          ← All reports
-        </Link>
-        <h1 className="mt-1 font-serif text-2xl text-ink">{report.title}</h1>
-        <p className="mt-1 text-xs text-ink-muted">
-          Generated {formatDateTime(report.created_at)}
-          {report.period_start && report.period_end
-            ? ` · covering ${formatDate(report.period_start)} – ${formatDate(report.period_end)}`
-            : ''}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <Link to={`/projects/${project.id}/reports`} className="text-xs text-ink-muted hover:text-clay">
+            ← All reports
+          </Link>
+          <h1 className="mt-1 font-serif text-2xl text-ink">{report.title}</h1>
+          <p className="mt-1 text-xs text-ink-muted">
+            Generated {formatDateTime(report.created_at)}
+            {report.period_start && report.period_end
+              ? ` · covering ${formatDate(report.period_start)} – ${formatDate(report.period_end)}`
+              : ''}
+          </p>
+        </div>
+        <Button variant="danger" onClick={handleDelete} disabled={deleting} className="text-xs">
+          {deleting ? 'Deleting…' : 'Delete report'}
+        </Button>
       </div>
+
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.total_media !== undefined && <StatCard label="Total media" value={stats.total_media} />}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useProjectContext } from '../hooks/useProjectContext';
 import { useAsync } from '../hooks/useAsync';
 import { mediaApi, type MediaFilters } from '../api/media';
+import type { Media } from '../api/types';
 import { MediaCard } from '../components/MediaCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -20,6 +21,18 @@ export function ProjectMediaPage() {
     () => mediaApi.list(project.id, filters),
     [project.id, filters],
   );
+
+  async function handleDeleteMedia(m: Media) {
+    if (!window.confirm(`Delete evidence "${m.description || m.original_filename || 'item'}"?`)) return;
+    try {
+      await mediaApi.remove(m.id);
+      refetch();
+      refetchProject();
+    } catch {
+      alert('Could not delete evidence.');
+    }
+  }
+
 
   return (
     <div className="space-y-6">
@@ -89,9 +102,10 @@ export function ProjectMediaPage() {
       {media && media.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {media.map((m) => (
-            <MediaCard key={m.id} media={m} />
+            <MediaCard key={m.id} media={m} onDelete={handleDeleteMedia} />
           ))}
         </div>
+
       )}
 
       {showUpload && (

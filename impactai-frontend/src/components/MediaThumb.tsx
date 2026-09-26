@@ -18,7 +18,7 @@ export function MediaThumb({ media, className = '' }: { media: Media; className?
       <img
         src={src}
         alt={media.description ?? media.original_filename ?? 'Evidence media'}
-        className="h-full w-full object-cover"
+        className="block h-full w-full object-cover"
         onError={() => setFailed(true)}
         loading="lazy"
       />

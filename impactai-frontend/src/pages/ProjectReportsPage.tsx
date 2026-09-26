@@ -15,6 +15,20 @@ export function ProjectReportsPage() {
   const { project } = useProjectContext();
   const { data: reports, loading, error, refetch } = useAsync(() => reportsApi.list(project.id), [project.id]);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDeleteReport(id: string, title: string) {
+    if (!window.confirm(`Delete report "${title}"?`)) return;
+    setDeletingId(id);
+    try {
+      await reportsApi.remove(id);
+      refetch();
+    } catch {
+      alert('Could not delete report.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -38,17 +52,41 @@ export function ProjectReportsPage() {
       {reports && reports.length > 0 && (
         <div className="space-y-3">
           {reports.map((r) => (
-            <Link
+            <div
               key={r.id}
-              to={`/projects/${project.id}/reports/${r.id}`}
-              className="block rounded-lg border border-border bg-surface p-4 transition-shadow hover:shadow-md"
+              className="group relative rounded-lg border border-border bg-surface p-4 transition-shadow hover:shadow-md"
             >
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif text-lg text-ink">{r.title}</h3>
-                <span className="text-xs text-ink-muted">{formatDateTime(r.created_at)}</span>
+              <div className="flex items-start justify-between">
+                <Link
+                  to={`/projects/${project.id}/reports/${r.id}`}
+                  className="font-serif text-lg text-ink hover:text-clay transition-colors"
+                >
+                  {r.title}
+                </Link>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-ink-muted">{formatDateTime(r.created_at)}</span>
+                  <button
+                    type="button"
+                    title="Delete report"
+                    disabled={deletingId === r.id}
+                    onClick={() => handleDeleteReport(r.id, r.title)}
+                    className="flex h-7 w-7 items-center justify-center rounded text-ink-muted opacity-0 transition-opacity hover:bg-danger-soft hover:text-danger group-hover:opacity-100 disabled:opacity-50"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{r.narrative}</p>
-            </Link>
+              <Link to={`/projects/${project.id}/reports/${r.id}`}>
+                <p className="mt-1 line-clamp-2 text-sm text-ink-muted hover:text-ink">{r.narrative}</p>
+              </Link>
+            </div>
           ))}
         </div>
       )}

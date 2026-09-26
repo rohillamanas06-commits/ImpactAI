@@ -13,4 +13,6 @@ export const reportsApi = {
     api.post<Report>(`/projects/${projectId}/reports`, data),
   list: (projectId: string) => api.get<Report[]>(`/projects/${projectId}/reports`),
   get: (reportId: string) => api.get<Report>(`/reports/${reportId}`),
+  remove: (reportId: string) => api.delete<void>(`/reports/${reportId}`),
 };
+

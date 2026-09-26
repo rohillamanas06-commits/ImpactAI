@@ -8,4 +8,7 @@ export const compareApi = {
       media_after_id: mediaAfterId,
     }),
   list: (projectId: string) => api.get<CompareResponse[]>(`/projects/${projectId}/comparisons`),
+  remove: (comparisonId: string) => api.delete<void>(`/comparisons/${comparisonId}`),
+  clearAll: (projectId: string) => api.delete<void>(`/projects/${projectId}/comparisons`),
 };
+

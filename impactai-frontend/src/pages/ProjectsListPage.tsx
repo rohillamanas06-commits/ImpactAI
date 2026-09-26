@@ -11,8 +11,10 @@ import { EmptyState } from '../components/EmptyState';
 import { formatDate } from '../utils/format';
 
 export function ProjectsListPage() {
+  const navigate = useNavigate();
   const { data: projects, loading, error, refetch } = useAsync(() => projectsApi.list(), []);
   const [showCreate, setShowCreate] = useState(false);
+  const [deletingProject, setDeletingProject] = useState<{ id: string; name: string } | null>(null);
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-10">
@@ -41,10 +43,30 @@ export function ProjectsListPage() {
             {projects.map((p) => (
               <Card
                 key={p.id}
-                className="cursor-pointer p-5 transition-shadow hover:shadow-md"
-                onClick={() => (window.location.href = `/projects/${p.id}`)}
+                className="group relative cursor-pointer p-5 transition-shadow hover:shadow-md"
+                onClick={() => navigate(`/projects/${p.id}`)}
               >
-                <h2 className="font-serif text-lg text-ink">{p.name}</h2>
+                <div className="flex items-start justify-between">
+                  <h2 className="font-serif text-lg text-ink transition-colors group-hover:text-clay">{p.name}</h2>
+                  <button
+                    type="button"
+                    title="Delete project"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingProject(p);
+                    }}
+                    className="ml-2 -mr-1 -mt-1 flex h-8 w-8 items-center justify-center rounded-md text-ink-muted opacity-0 transition-opacity hover:bg-danger-soft hover:text-danger group-hover:opacity-100"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
                 {p.description && <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{p.description}</p>}
                 <p className="mt-3 text-xs text-ink-muted">Created {formatDate(p.created_at)}</p>
               </Card>
@@ -62,7 +84,63 @@ export function ProjectsListPage() {
           }}
         />
       )}
+
+      {deletingProject && (
+        <DeleteProjectModal
+          project={deletingProject}
+          onClose={() => setDeletingProject(null)}
+          onDeleted={() => {
+            setDeletingProject(null);
+            refetch();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function DeleteProjectModal({
+  project,
+  onClose,
+  onDeleted,
+}: {
+  project: { id: string; name: string };
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await projectsApi.remove(project.id);
+      onDeleted();
+    } catch {
+      setError('Could not delete the project. Please try again.');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Delete "${project.name}"?`} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-ink-muted">
+          Are you sure you want to delete this project? All associated media evidence, comparisons, and impact
+          reports will be permanently deleted. This action cannot be undone.
+        </p>
+        {error && <ErrorBanner message={error} />}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="button" variant="danger" onClick={handleDelete} disabled={submitting}>
+            {submitting ? 'Deleting…' : 'Delete project'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

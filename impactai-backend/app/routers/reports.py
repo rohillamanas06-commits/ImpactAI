@@ -94,3 +94,24 @@ async def get_report(report_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     if not report:
         raise HTTPException(404, "Report not found")
     return report
+
+
+@detail_router.delete("/{report_id}", status_code=204)
+async def delete_report(report_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    report = await db.get(Report, report_id)
+    if not report:
+        raise HTTPException(404, "Report not found")
+    await db.delete(report)
+    await db.commit()
+    return None
+
+
+@router.delete("/{report_id}", status_code=204)
+async def delete_project_report(project_id: uuid.UUID, report_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    report = await db.get(Report, report_id)
+    if not report or report.project_id != project_id:
+        raise HTTPException(404, "Report not found")
+    await db.delete(report)
+    await db.commit()
+    return None
+
