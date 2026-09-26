@@ -79,9 +79,10 @@ async def _generate_embedding(text: str, is_query: bool = False) -> list:
     response = await client.aio.models.embed_content(
         model=settings.GEMINI_EMBEDDING_MODEL,
         contents=[text],
-        config=types.EmbedContentConfig(task_type=task_type),
+        config=types.EmbedContentConfig(task_type=task_type, output_dimensionality=768),
     )
     return response.embeddings[0].values
+
 
 
 async def generate_embedding(text: str, is_query: bool = False) -> list:

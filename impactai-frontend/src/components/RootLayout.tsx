@@ -2,13 +2,13 @@ import { Link, Outlet } from 'react-router-dom';
 
 export function RootLayout() {
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-60 shrink-0 flex-col gap-8 bg-shell px-5 py-6 text-shell-ink">
+    <div className="flex h-screen w-screen overflow-hidden bg-paper">
+      <aside className="flex h-screen w-60 shrink-0 flex-col gap-8 overflow-y-auto border-r border-shell-line bg-shell px-5 py-6 text-shell-ink">
         <Link to="/" className="font-serif text-xl tracking-tight">
           ImpactAI
         </Link>
         <nav className="flex flex-col gap-1 text-sm">
-          <Link to="/" className="rounded px-3 py-2 hover:bg-shell-soft">
+          <Link to="/" className="rounded px-3 py-2 transition-colors hover:bg-shell-soft">
             All projects
           </Link>
         </nav>
@@ -17,9 +17,10 @@ export function RootLayout() {
           and report on what changed.
         </p>
       </aside>
-      <main className="min-w-0 flex-1 bg-paper">
+      <main className="h-screen min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-paper">
         <Outlet />
       </main>
     </div>
   );
 }
+

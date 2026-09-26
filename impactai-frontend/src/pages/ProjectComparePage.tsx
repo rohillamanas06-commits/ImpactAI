@@ -114,7 +114,7 @@ export function ProjectComparePage() {
       {/* ── Step indicator ── */}
       <div className="flex items-center gap-3">
         <StepBadge n={1} active={step === 1} done={!!before} label="Pick Before" />
-        <div className="h-px w-6 bg-border" />
+        <span className="text-sm font-semibold text-ink-muted">→</span>
         <StepBadge n={2} active={step === 2} done={!!after} label="Pick After" />
       </div>
 
@@ -129,9 +129,6 @@ export function ProjectComparePage() {
               <Button onClick={runCompare} disabled={comparing}>
                 {comparing ? 'Analyzing…' : 'Compare'}
               </Button>
-              <button onClick={reset} className="text-xs text-ink-muted underline hover:text-ink">
-                Reset
-              </button>
             </div>
           )}
         </div>

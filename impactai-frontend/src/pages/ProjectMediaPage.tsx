@@ -55,17 +55,27 @@ export function ProjectMediaPage() {
             />
           </FilterField>
           <FilterField label="Type">
-            <select
-              value={pendingFilters.resource_type ?? ''}
-              onChange={(e) =>
-                setPendingFilters((f) => ({ ...f, resource_type: (e.target.value || undefined) as 'image' | 'video' | undefined }))
-              }
-              className="rounded-md border border-border-strong px-2 py-1.5 text-sm"
-            >
-              <option value="">All</option>
-              <option value="image">Images</option>
-              <option value="video">Videos</option>
-            </select>
+            <div className="relative">
+              <select
+                value={pendingFilters.resource_type ?? ''}
+                onChange={(e) =>
+                  setPendingFilters((f) => ({
+                    ...f,
+                    resource_type: (e.target.value || undefined) as 'image' | 'video' | undefined,
+                  }))
+                }
+                className="w-28 appearance-none rounded-md border border-border-strong px-2 py-1.5 pr-7 text-sm cursor-pointer"
+              >
+                <option value="">All</option>
+                <option value="image">Images</option>
+                <option value="video">Videos</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-ink-muted">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
           </FilterField>
           <FilterField label="From">
             <input
