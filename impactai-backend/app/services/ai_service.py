@@ -14,7 +14,7 @@ import json
 import httpx
 from google import genai
 from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 from app.config import settings
 
@@ -47,7 +47,7 @@ Be concise and factual. Do not invent specific place names you cannot see in the
 
 
 @_retry
-async def analyze_image_url(image_url: str, is_video_frame: bool = False) -> dict:
+async def _analyze_image_url(image_url: str, is_video_frame: bool = False) -> dict:
     image_bytes, mime_type = await _download_bytes(image_url)
     response = await client.aio.models.generate_content(
         model=settings.GEMINI_VISION_MODEL,
@@ -63,11 +63,18 @@ async def analyze_image_url(image_url: str, is_video_frame: bool = False) -> dic
     return result
 
 
+async def analyze_image_url(image_url: str, is_video_frame: bool = False) -> dict:
+    try:
+        return await _analyze_image_url(image_url, is_video_frame)
+    except RetryError as exc:
+        raise RuntimeError(f"AI service unavailable after retries: {exc.last_attempt.exception()}") from exc
+
+
 # ============================================================
 # 2. Embeddings (semantic search)
 # ============================================================
 @_retry
-async def generate_embedding(text: str, is_query: bool = False) -> list:
+async def _generate_embedding(text: str, is_query: bool = False) -> list:
     task_type = "RETRIEVAL_QUERY" if is_query else "RETRIEVAL_DOCUMENT"
     response = await client.aio.models.embed_content(
         model=settings.GEMINI_EMBEDDING_MODEL,
@@ -75,6 +82,13 @@ async def generate_embedding(text: str, is_query: bool = False) -> list:
         config=types.EmbedContentConfig(task_type=task_type),
     )
     return response.embeddings[0].values
+
+
+async def generate_embedding(text: str, is_query: bool = False) -> list:
+    try:
+        return await _generate_embedding(text, is_query)
+    except RetryError as exc:
+        raise RuntimeError(f"AI service unavailable after retries: {exc.last_attempt.exception()}") from exc
 
 
 # ============================================================
@@ -94,7 +108,7 @@ Look at both images and return ONLY a JSON object:
 
 
 @_retry
-async def compare_media(before_url: str, after_url: str, before_ctx: str = "", after_ctx: str = "") -> dict:
+async def _compare_media(before_url: str, after_url: str, before_ctx: str = "", after_ctx: str = "") -> dict:
     (before_bytes, before_mime), (after_bytes, after_mime) = [
         await _download_bytes(before_url),
         await _download_bytes(after_url),
@@ -112,6 +126,13 @@ async def compare_media(before_url: str, after_url: str, before_ctx: str = "", a
         config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
     return json.loads(response.text)
+
+
+async def compare_media(before_url: str, after_url: str, before_ctx: str = "", after_ctx: str = "") -> dict:
+    try:
+        return await _compare_media(before_url, after_url, before_ctx, after_ctx)
+    except RetryError as exc:
+        raise RuntimeError(f"AI service unavailable after retries: {exc.last_attempt.exception()}") from exc
 
 
 # ============================================================
@@ -135,7 +156,7 @@ Return ONLY a JSON object:
 
 
 @_retry
-async def generate_report_narrative(stats: dict, samples: list) -> dict:
+async def _generate_report_narrative(stats: dict, samples: list) -> dict:
     stats_text = json.dumps(stats, default=str, indent=2)
     samples_text = "\n".join(f"- {s}" for s in samples) if samples else "None provided."
     prompt = REPORT_PROMPT.format(stats=stats_text, samples=samples_text)
@@ -145,3 +166,10 @@ async def generate_report_narrative(stats: dict, samples: list) -> dict:
         config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
     return json.loads(response.text)
+
+
+async def generate_report_narrative(stats: dict, samples: list) -> dict:
+    try:
+        return await _generate_report_narrative(stats, samples)
+    except RetryError as exc:
+        raise RuntimeError(f"AI service unavailable after retries: {exc.last_attempt.exception()}") from exc

@@ -24,12 +24,18 @@ async def compare_media(payload: CompareRequest, db: AsyncSession = Depends(get_
     before_url = before.thumbnail_url or before.secure_url
     after_url = after.thumbnail_url or after.secure_url
 
-    ai_result = await ai_service.compare_media(
-        before_url,
-        after_url,
-        before_ctx=before.description or "",
-        after_ctx=after.description or "",
-    )
+    try:
+        ai_result = await ai_service.compare_media(
+            before_url,
+            after_url,
+            before_ctx=before.description or "",
+            after_ctx=after.description or "",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI service is temporarily unavailable. Please try again in a moment. ({exc})",
+        ) from exc
 
     comparison = Comparison(
         project_id=before.project_id,
@@ -65,6 +71,8 @@ async def list_comparisons(project_id: uuid.UUID, db: AsyncSession = Depends(get
     for c in comparisons:
         before = await db.get(Media, c.media_before_id)
         after = await db.get(Media, c.media_after_id)
+        if not before or not after:
+            continue
         responses.append(
             CompareResponse(
                 id=c.id,
@@ -77,3 +85,24 @@ async def list_comparisons(project_id: uuid.UUID, db: AsyncSession = Depends(get
             )
         )
     return responses
+
+
+@router.delete("/comparisons/{comparison_id}", status_code=204)
+async def delete_comparison(comparison_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    comparison = await db.get(Comparison, comparison_id)
+    if not comparison:
+        raise HTTPException(404, "Comparison not found")
+    await db.delete(comparison)
+    await db.commit()
+    return None
+
+
+@router.delete("/projects/{project_id}/comparisons", status_code=204)
+async def clear_project_comparisons(project_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Comparison).where(Comparison.project_id == project_id))
+    comparisons = result.scalars().all()
+    for c in comparisons:
+        await db.delete(c)
+    await db.commit()
+    return None
+
