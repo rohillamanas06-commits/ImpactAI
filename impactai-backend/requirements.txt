@@ -1,0 +1,26 @@
+# ---------- Web framework ----------
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+
+# ---------- Database (Postgres / Neon + pgvector) ----------
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+pgvector==0.3.6
+
+# ---------- Settings / env ----------
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# ---------- Media layer ----------
+cloudinary==1.41.0
+
+# ---------- AI (Google Gemini: vision + embeddings + text) ----------
+# NOTE: `google-generativeai` is fully deprecated (sunset) — this uses its
+# replacement, the unified Gen AI SDK.
+google-genai==1.75.0
+
+# ---------- HTTP / resilience ----------
+httpx==0.28.1
+tenacity==9.0.0

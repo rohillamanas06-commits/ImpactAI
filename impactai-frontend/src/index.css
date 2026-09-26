@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", ui-serif, Georgia, serif;
+
+  /* App shell (sidebar / top bar) — deep moss charcoal, not a generic near-black */
+  --color-shell: #171d1a;
+  --color-shell-soft: #202823;
+  --color-shell-line: #2c352f;
+  --color-shell-ink: #eef1ec;
+  --color-shell-ink-muted: #9aa79d;
+
+  /* Main canvas — warm paper, not stark white */
+  --color-paper: #faf8f3;
+  --color-surface: #ffffff;
+  --color-border: #e6e1d3;
+  --color-border-strong: #d3cdba;
+
+  /* Ink */
+  --color-ink: #21261f;
+  --color-ink-muted: #6b6558;
+
+  /* Accents, grounded in field-evidence subject matter */
+  --color-clay: #b5622a;
+  --color-clay-hover: #9c5323;
+  --color-clay-soft: #f5e6da;
+
+  --color-moss: #4b6b4e;
+  --color-moss-soft: #e7ede4;
+
+  --color-slate: #3e6e8e;
+  --color-slate-soft: #e4edf1;
+
+  --color-danger: #a03d3d;
+  --color-danger-soft: #f6e4e2;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-clay);
+  outline-offset: 2px;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
