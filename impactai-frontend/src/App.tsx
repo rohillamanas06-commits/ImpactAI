@@ -4,6 +4,8 @@ import { ProjectLayout } from './components/ProjectLayout';
 import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectOverviewPage } from './pages/ProjectOverviewPage';
 import { ProjectMediaPage } from './pages/ProjectMediaPage';
+import { ProjectMapPage } from './pages/ProjectMapPage';
+import { ProjectTimelinePage } from './pages/ProjectTimelinePage';
 import { ProjectSearchPage } from './pages/ProjectSearchPage';
 import { ProjectComparePage } from './pages/ProjectComparePage';
 import { ProjectReportsPage } from './pages/ProjectReportsPage';
@@ -21,6 +23,8 @@ function App() {
           <Route path="/projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectOverviewPage />} />
             <Route path="media" element={<ProjectMediaPage />} />
+            <Route path="map" element={<ProjectMapPage />} />
+            <Route path="timeline" element={<ProjectTimelinePage />} />
             <Route path="search" element={<ProjectSearchPage />} />
             <Route path="compare" element={<ProjectComparePage />} />
             <Route path="reports" element={<ProjectReportsPage />} />
@@ -32,5 +36,6 @@ function App() {
     </BrowserRouter>
   );
 }
+
 
 export default App;

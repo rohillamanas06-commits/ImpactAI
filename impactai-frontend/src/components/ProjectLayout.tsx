@@ -6,10 +6,13 @@ import { Spinner } from './Spinner';
 import { ErrorBanner } from './ErrorBanner';
 import { Modal } from './Modal';
 import { Button } from './Button';
+import { WhatsAppHubModal } from './WhatsApp/WhatsAppHubModal';
 
 const tabs = [
   { to: '', label: 'Overview', end: true },
   { to: 'media', label: 'Media', end: false },
+  { to: 'map', label: 'Map', end: false },
+  { to: 'timeline', label: 'Timeline', end: false },
   { to: 'search', label: 'Search', end: false },
   { to: 'compare', label: 'Compare', end: false },
   { to: 'reports', label: 'Reports', end: false },
@@ -20,6 +23,7 @@ export function ProjectLayout() {
   const navigate = useNavigate();
   const { data: project, loading, error, refetch } = useAsync(() => projectsApi.get(projectId!), [projectId]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showWhatsAppHub, setShowWhatsAppHub] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -48,15 +52,26 @@ export function ProjectLayout() {
             {project?.description && <p className="mt-1 max-w-2xl text-sm text-ink-muted">{project.description}</p>}
           </div>
           {project && (
-            <Button
-              variant="danger"
-              onClick={() => setShowDeleteModal(true)}
-              className="text-xs"
-            >
-              Delete project
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowWhatsAppHub(true)}
+                className="text-xs"
+              >
+                WhatsApp &amp; Social Hub
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => setShowDeleteModal(true)}
+                className="text-xs"
+              >
+                Delete project
+              </Button>
+            </div>
           )}
         </div>
+
+
         <nav className="mt-5 flex gap-1 border-b border-border">
           {tabs.map((tab) => (
             <NavLink
@@ -109,6 +124,19 @@ export function ProjectLayout() {
         {error && <ErrorBanner message={error} onRetry={refetch} />}
         {project && <Outlet context={{ project, refetchProject: refetch }} />}
       </div>
+
+      {showWhatsAppHub && project && (
+        <WhatsAppHubModal
+          isOpen={showWhatsAppHub}
+          onClose={() => setShowWhatsAppHub(false)}
+          activeProjectId={project.id}
+          projectName={project.name}
+          onMediaAdded={() => {
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
+

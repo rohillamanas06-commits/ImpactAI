@@ -1,5 +1,5 @@
-import { api } from './client';
-import type { Report } from './types';
+import { api, API_BASE_URL, API_PREFIX } from './client';
+import type { Report, SocialShareKit } from './types';
 
 export interface ReportGenerateInput {
   title?: string;
@@ -14,5 +14,8 @@ export const reportsApi = {
   list: (projectId: string) => api.get<Report[]>(`/projects/${projectId}/reports`),
   get: (reportId: string) => api.get<Report>(`/reports/${reportId}`),
   remove: (reportId: string) => api.delete<void>(`/reports/${reportId}`),
+  getPdfUrl: (reportId: string) => `${API_BASE_URL}${API_PREFIX}/reports/${reportId}/pdf`,
+  getSocialKit: (reportId: string) => api.get<SocialShareKit>(`/reports/${reportId}/social`),
 };
+
 

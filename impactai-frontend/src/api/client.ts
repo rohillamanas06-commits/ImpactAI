@@ -53,4 +53,5 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
-export { BASE_URL };
+export { BASE_URL, BASE_URL as API_BASE_URL, API_PREFIX, API_KEY };
+

@@ -174,3 +174,141 @@ async def generate_report_narrative(stats: dict, samples: list) -> dict:
         return await _generate_report_narrative(stats, samples)
     except RetryError as exc:
         raise RuntimeError(f"AI service unavailable after retries: {exc.last_attempt.exception()}") from exc
+
+
+# ============================================================
+# 5. Voice Assistant intent parsing & conversational response
+# ============================================================
+VOICE_INTENT_PROMPT = """You are the AI Voice Assistant brain for ImpactAI, a media evidence platform for NGOs and field workers.
+A field worker or project manager spoke the following voice query:
+"{query}"
+
+Project context (if available):
+{project_context}
+
+Analyze the user's spoken intent and extract parameters. Return ONLY a JSON object with this exact structure:
+{{
+  "intent": "search" | "compare" | "report" | "status" | "general_qa",
+  "search_terms": "cleaned search keywords or null if not search",
+  "location_filter": "extracted location name or null",
+  "activity_filter": "extracted activity or null",
+  "date_filter": "extracted date range hint (e.g. 'last month', '2024') or null",
+  "spoken_response": "natural, friendly, concise 1-2 sentence spoken reply to read back to the field worker aloud",
+  "action_type": "search_media" | "compare_media" | "generate_report" | "check_status" | "answer_question"
+}}
+Keep spoken_response conversational and direct, suitable for text-to-speech."""
+
+
+@_retry
+async def _interpret_voice_command(query: str, project_context: str = "") -> dict:
+    prompt = VOICE_INTENT_PROMPT.format(query=query, project_context=project_context or "General project evidence")
+    response = await client.aio.models.generate_content(
+        model=settings.GEMINI_TEXT_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
+    return json.loads(response.text)
+
+
+async def interpret_voice_command(query: str, project_context: str = "") -> dict:
+    try:
+        return await _interpret_voice_command(query, project_context)
+    except Exception as exc:
+        # Graceful fallback for voice
+        return {
+            "intent": "search",
+            "search_terms": query,
+            "location_filter": None,
+            "activity_filter": None,
+            "date_filter": None,
+            "spoken_response": f"Looking up evidence for {query}.",
+            "action_type": "search_media",
+        }
+
+
+# ============================================================
+# 6. Coordinate Estimation for Map View
+# ============================================================
+COORDINATE_PROMPT = """Given the location name or setting: "{location_name}", return ONLY a JSON object with decimal coordinates:
+{{
+  "latitude": float or null,
+  "longitude": float or null,
+  "confidence": "high" | "medium" | "low"
+}}
+If the location is recognizable (city, state, country, known landmark or conservation zone), provide real approximate coordinates.
+If completely generic (e.g. "riverbank", "field"), estimate coordinates within India or central Africa or return null."""
+
+
+@_retry
+async def _estimate_coordinates(location_name: str) -> tuple[float | None, float | None]:
+    prompt = COORDINATE_PROMPT.format(location_name=location_name)
+    response = await client.aio.models.generate_content(
+        model=settings.GEMINI_TEXT_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
+    data = json.loads(response.text)
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        return float(lat), float(lon)
+    return None, None
+
+
+async def estimate_coordinates(location_name: str) -> tuple[float | None, float | None]:
+    if not location_name or len(location_name.strip()) < 2:
+        return None, None
+    try:
+        return await _estimate_coordinates(location_name)
+    except Exception:
+        return None, None
+
+
+# ============================================================
+# 7. Social Media Campaign Share Kit
+# ============================================================
+SOCIAL_PROMPT = """You are a communications specialist for high-impact NGOs.
+Generate a social media campaign distribution kit for this project impact report:
+Title: {title}
+Stats: {stats}
+Highlights: {highlights}
+Narrative: {narrative}
+
+Return ONLY a JSON object with:
+{{
+  "twitter_card_text": "Punchy tweet under 240 chars with key metric and call to action",
+  "linkedin_post_text": "Professional 2-3 paragraph post highlighting measurable impact, methodology, and verified evidence",
+  "instagram_caption": "Engaging visual-first Instagram caption with emojis, storytelling, and call to action",
+  "hashtags": ["list", "of", "relevant", "hashtags", "starting", "without", "hash"],
+  "suggested_stat_callouts": ["3-4 short bold callout phrases, e.g. '1,200kg Waste Removed'"]
+}}"""
+
+
+@_retry
+async def _generate_social_share_kit(title: str, stats: dict, narrative: str, highlights: list) -> dict:
+    prompt = SOCIAL_PROMPT.format(
+        title=title,
+        stats=json.dumps(stats, default=str),
+        highlights="\n".join(f"- {h}" for h in highlights) if highlights else "None",
+        narrative=narrative or "Verified impact report",
+    )
+    response = await client.aio.models.generate_content(
+        model=settings.GEMINI_TEXT_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
+    return json.loads(response.text)
+
+
+async def generate_social_share_kit(title: str, stats: dict, narrative: str, highlights: list) -> dict:
+    try:
+        return await _generate_social_share_kit(title, stats, narrative, highlights)
+    except Exception:
+        return {
+            "twitter_card_text": f"Proud to share our verified impact report: {title}. Verified evidence powered by ImpactAI.",
+            "linkedin_post_text": f"Excited to present our latest impact evidence for {title}.\n\nThrough rigorous photo verification and AI-driven analysis, we've documented tangible change in the field.",
+            "instagram_caption": f"🌿 Real change, verified evidence. Check out the latest milestones for {title}! #Impact #Sustainability #FieldEvidence",
+            "hashtags": ["ImpactAI", "Sustainability", "ClimateAction", "FieldEvidence", "NGOImpact"],
+            "suggested_stat_callouts": ["Verified Evidence", "AI Documented", "Field Realities"],
+        }
+

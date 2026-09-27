@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useProjectContext } from '../hooks/useProjectContext';
 import { useAsync } from '../hooks/useAsync';
 import { mediaApi } from '../api/media';
@@ -16,6 +16,10 @@ import React from 'react';
 
 export function ProjectComparePage() {
   const { project } = useProjectContext();
+  const [searchParams] = useSearchParams();
+  const beforeParam = searchParams.get('before');
+  const afterParam = searchParams.get('after');
+
   const { data: media, loading, error } = useAsync(() => mediaApi.list(project.id), [project.id]);
   const {
     data: history,
@@ -34,12 +38,25 @@ export function ProjectComparePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
 
+  // Pre-populate before and after from query params if passed from Timeline
+  useEffect(() => {
+    if (media && beforeParam && !before) {
+      const match = media.find((m) => m.id === beforeParam);
+      if (match) setBefore(match);
+    }
+    if (media && afterParam && !after) {
+      const match = media.find((m) => m.id === afterParam);
+      if (match) setAfter(match);
+    }
+  }, [media, beforeParam, afterParam]);
+
   // scroll newest result into view after a new compare
   useEffect(() => {
     if (latestId && latestRef.current) {
       latestRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [latestId, history]);
+
 
   // step 1 = picking before, step 2 = picking after
   const step = before === null ? 1 : 2;

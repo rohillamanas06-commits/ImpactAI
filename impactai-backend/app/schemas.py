@@ -61,6 +61,8 @@ class MediaOut(BaseModel):
     activity: Optional[str] = None
     ai_location_guess: Optional[str] = None
     ai_activity_guess: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     description: Optional[str] = None
     tags: Optional[List[str]] = []
     signals: Optional[List[str]] = []
@@ -70,6 +72,13 @@ class MediaOut(BaseModel):
 class MediaDetail(MediaOut):
     transformations: Optional[dict] = None
     ai_raw_response: Optional[dict] = None
+    exif_data: Optional[dict] = None
+
+
+class MediaGeoUpdate(BaseModel):
+    latitude: float
+    longitude: float
+    location: Optional[str] = None
 
 
 # ================= Search =================
@@ -121,3 +130,79 @@ class ReportOut(BaseModel):
     highlights: Optional[List[str]] = []
     source_media_ids: Optional[List[str]] = []
     created_at: datetime
+
+
+# ================= Voice Assistant =================
+class VoiceQueryRequest(BaseModel):
+    query: str
+    project_id: Optional[uuid.UUID] = None
+
+
+class VoiceQueryResponse(BaseModel):
+    intent: str  # search | compare | report | status | general_qa
+    spoken_response: str
+    action_type: str
+    data: Optional[dict] = None
+    extracted_params: Optional[dict] = None
+
+
+# ================= WhatsApp / Meta =================
+class WhatsAppSimulateRequest(BaseModel):
+    sender_phone: str = Field(default="+1234567890")
+    sender_name: Optional[str] = "Field Officer"
+    caption: str = Field(default="#water-project Installed new solar water pump in village sector 3")
+    image_url: Optional[str] = None
+    project_id: Optional[uuid.UUID] = None
+
+
+class WhatsAppMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    sender_phone: str
+    sender_name: Optional[str] = None
+    message_id: Optional[str] = None
+    caption: Optional[str] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = "image"
+    project_id: Optional[uuid.UUID] = None
+    media_id: Optional[uuid.UUID] = None
+    status: str
+    reply_text: Optional[str] = None
+    created_at: datetime
+
+
+# ================= Timeline & Pairs =================
+class BeforeAfterPair(BaseModel):
+    before_media: MediaOut
+    after_media: MediaOut
+    location: Optional[str] = None
+    similarity_reason: str
+    time_gap_days: int
+
+
+class TimelineBucket(BaseModel):
+    period: str  # YYYY-MM
+    count: int
+    media_items: List[MediaOut]
+
+
+class TimelineResponse(BaseModel):
+    project_id: uuid.UUID
+    total_items: int
+    date_min: Optional[date] = None
+    date_max: Optional[date] = None
+    buckets: List[TimelineBucket]
+    auto_detected_pairs: List[BeforeAfterPair]
+
+
+# ================= Social Share =================
+class SocialShareKit(BaseModel):
+    report_id: uuid.UUID
+    title: str
+    twitter_card_text: str
+    linkedin_post_text: str
+    instagram_caption: str
+    hashtags: List[str]
+    suggested_stat_callouts: List[str]
+    shareable_url: str
+

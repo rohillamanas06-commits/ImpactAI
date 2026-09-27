@@ -64,6 +64,11 @@ class Media(Base):
     ai_location_guess: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ai_activity_guess: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # ---- Geolocation & EXIF (Map View & Evidence Traceability) ----
+    latitude: Mapped[float | None] = mapped_column(nullable=True)
+    longitude: Mapped[float | None] = mapped_column(nullable=True)
+    exif_data: Mapped[dict | None] = mapped_column(JSONB, default=dict)
+
     # ---- AI analysis output ----
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[list | None] = mapped_column(JSONB, default=list)
@@ -122,3 +127,21 @@ class Report(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     project: Mapped["Project"] = relationship(back_populates="reports")
+
+
+class WhatsAppMessage(Base):
+    __tablename__ = "whatsapp_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sender_phone: Mapped[str] = mapped_column(String(50), nullable=False)
+    sender_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(50), default="image")
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    media_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="received")  # received | processed | failed
+    reply_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+

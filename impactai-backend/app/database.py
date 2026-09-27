@@ -32,3 +32,6 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE media ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;"))
+        await conn.execute(text("ALTER TABLE media ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;"))
+        await conn.execute(text("ALTER TABLE media ADD COLUMN IF NOT EXISTS exif_data JSONB DEFAULT '{}';"))

@@ -13,6 +13,8 @@ export interface UploadMeta {
   location?: string;
   activity?: string;
   media_date?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export const mediaApi = {
@@ -31,11 +33,21 @@ export const mediaApi = {
     if (meta.location) form.append('location', meta.location);
     if (meta.activity) form.append('activity', meta.activity);
     if (meta.media_date) form.append('media_date', meta.media_date);
+    if (meta.latitude !== undefined && meta.latitude !== null) form.append('latitude', String(meta.latitude));
+    if (meta.longitude !== undefined && meta.longitude !== null) form.append('longitude', String(meta.longitude));
     return api.post<Media[]>(`/projects/${projectId}/media`, form);
   },
+
+  getGeo: (projectId: string) => api.get<Media[]>(`/projects/${projectId}/geo`),
+
+  updateGeo: (mediaId: string, data: { latitude: number; longitude: number; location?: string }, projectId?: string) =>
+    api.patch<Media>(projectId ? `/projects/${projectId}/media/${mediaId}/geo` : `/media/${mediaId}/geo`, data),
+
+  getTimeline: (projectId: string) => api.get<import('./types').TimelineResponse>(`/projects/${projectId}/timeline`),
 
   get: (mediaId: string) => api.get<MediaDetail>(`/media/${mediaId}`),
 
   remove: (mediaId: string, destroyOnCloudinary = false) =>
     api.delete<void>(`/media/${mediaId}?destroy_on_cloudinary=${destroyOnCloudinary}`),
 };
+

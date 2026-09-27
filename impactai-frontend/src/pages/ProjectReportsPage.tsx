@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useProjectContext } from '../hooks/useProjectContext';
 import { useAsync } from '../hooks/useAsync';
 import { reportsApi } from '../api/reports';
+import type { Report } from '../api/types';
 import { ApiError } from '../api/client';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -10,12 +11,15 @@ import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
 import { formatDateTime } from '../utils/format';
+import { SocialShareModal } from '../components/Reports/SocialShareModal';
 
 export function ProjectReportsPage() {
   const { project } = useProjectContext();
   const { data: reports, loading, error, refetch } = useAsync(() => reportsApi.list(project.id), [project.id]);
   const [showGenerate, setShowGenerate] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [shareReport, setShareReport] = useState<Report | null>(null);
+
 
   async function handleDeleteReport(id: string, title: string) {
     if (!window.confirm(`Delete report "${title}"?`)) return;
@@ -86,10 +90,43 @@ export function ProjectReportsPage() {
               <Link to={`/projects/${project.id}/reports/${r.id}`}>
                 <p className="mt-1 line-clamp-2 text-sm text-ink-muted hover:text-ink">{r.narrative}</p>
               </Link>
+              <div className="mt-3 flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                <Link to={`/projects/${project.id}/reports/${r.id}`} className="font-semibold text-clay hover:underline">
+                  Read Full Report &amp; Evidence Traceability →
+                </Link>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={reportsApi.getPdfUrl(r.id)}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-1 font-semibold hover:bg-emerald-100 transition-colors"
+                  >
+                    PDF
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setShareReport(r)}
+                    className="inline-flex items-center rounded bg-black/5 text-ink border border-border px-2 py-1 font-semibold hover:border-clay hover:text-clay transition-colors"
+                  >
+                    Campaign Kit
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {shareReport && (
+        <SocialShareModal
+          report={shareReport}
+          projectName={project.name}
+          isOpen={true}
+          onClose={() => setShareReport(null)}
+        />
+      )}
+
 
       {showGenerate && (
         <GenerateReportModal

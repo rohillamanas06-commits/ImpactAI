@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import compare, media, projects, reports, search
+from app.routers import compare, media, projects, reports, search, voice, webhooks
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("impactai")
@@ -54,6 +54,11 @@ app.include_router(search.router, prefix=settings.API_V1_PREFIX)
 app.include_router(compare.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.detail_router, prefix=settings.API_V1_PREFIX)
+app.include_router(voice.router, prefix=settings.API_V1_PREFIX)
+app.include_router(webhooks.router, prefix=settings.API_V1_PREFIX)
+# Also mount webhooks at root /webhooks for direct Meta Cloud API callbacks
+app.include_router(webhooks.router)
+
 
 
 @app.get("/health", tags=["Health"])

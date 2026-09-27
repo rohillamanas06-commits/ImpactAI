@@ -45,6 +45,8 @@ export interface Media {
   media_date: string | null;
   location: string | null;
   activity: string | null;
+  latitude: number | null;
+  longitude: number | null;
   ai_location_guess: string | null;
   ai_activity_guess: string | null;
   description: string | null;
@@ -56,6 +58,7 @@ export interface Media {
 export interface MediaDetail extends Media {
   transformations: Record<string, unknown> | null;
   ai_raw_response: Record<string, unknown> | null;
+  exif_data: Record<string, unknown> | null;
 }
 
 export interface SearchResult {
@@ -94,3 +97,69 @@ export interface Report {
   source_media_ids: string[];
   created_at: string;
 }
+
+export interface BeforeAfterPair {
+  before_media: Media;
+  after_media: Media;
+  location: string | null;
+  similarity_reason: string;
+  time_gap_days: number;
+}
+
+export interface TimelineBucket {
+  period: string; // YYYY-MM
+  count: number;
+  media_items: Media[];
+}
+
+export interface TimelineResponse {
+  project_id: UUID;
+  total_items: number;
+  date_min: string | null;
+  date_max: string | null;
+  buckets: TimelineBucket[];
+  auto_detected_pairs: BeforeAfterPair[];
+}
+
+export interface WhatsAppMessage {
+  id: UUID;
+  sender_phone: string;
+  sender_name: string | null;
+  message_id: string | null;
+  caption: string | null;
+  media_url: string | null;
+  media_type: string | null;
+  project_id: UUID | null;
+  media_id: UUID | null;
+  status: string;
+  reply_text: string | null;
+  created_at: string;
+}
+
+export interface WhatsAppSimulatePayload {
+  sender_phone: string;
+  sender_name?: string;
+  caption: string;
+  image_url?: string;
+  project_id?: UUID;
+}
+
+export interface SocialShareKit {
+  report_id: UUID;
+  title: string;
+  twitter_card_text: string;
+  linkedin_post_text: string;
+  instagram_caption: string;
+  hashtags: string[];
+  suggested_stat_callouts: string[];
+  shareable_url: string;
+}
+
+export interface VoiceQueryResponse {
+  intent: string;
+  spoken_response: string;
+  action_type: string;
+  data?: Record<string, any>;
+  extracted_params?: Record<string, any>;
+}
+
