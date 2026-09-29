@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
     API_KEY: str = ""  # blank disables the simple X-API-Key auth
 
+    # ---------- JWT Auth ----------
+    JWT_SECRET_KEY: str = "impactai-super-secret-jwt-key-2025-hackathon"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
     # ---------- Database ----------
     DATABASE_URL: str
 
@@ -36,9 +40,14 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
 
     # ---------- Uploads ----------
-    MAX_UPLOAD_SIZE_MB: int = 50
-    ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp"
-    ALLOWED_VIDEO_TYPES: str = "video/mp4,video/quicktime,video/webm"
+    MAX_UPLOAD_SIZE_MB: int = 100
+    ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp,image/gif,image/tiff"
+    ALLOWED_VIDEO_TYPES: str = "video/mp4,video/quicktime,video/webm,video/x-msvideo,video/mpeg"
+
+    # ---------- WhatsApp / Meta Cloud API ----------
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_ACCESS_TOKEN: str = ""
+    WHATSAPP_VERIFY_TOKEN: str = "impactai_meta_webhook_secret_2025"
 
     @property
     def cors_origins_list(self) -> List[str]:

@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
 from app.routers import compare, media, projects, reports, search, voice, webhooks
@@ -48,6 +49,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth_router)
 app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 app.include_router(media.router, prefix=settings.API_V1_PREFIX)
 app.include_router(search.router, prefix=settings.API_V1_PREFIX)

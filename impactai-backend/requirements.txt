@@ -13,8 +13,14 @@ pydantic==2.9.2
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 
+# ---------- Auth (JWT & Password Hashing) ----------
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+email-validator==2.2.0
+
 # ---------- Media layer ----------
 cloudinary==1.41.0
+Pillow==11.0.0
 
 # ---------- AI (Google Gemini: vision + embeddings + text) ----------
 # NOTE: `google-generativeai` is fully deprecated (sunset) — this uses its
@@ -24,3 +30,6 @@ google-genai==1.75.0
 # ---------- HTTP / resilience ----------
 httpx==0.28.1
 tenacity==9.0.0
+
+# ---------- PDF Generation ----------
+reportlab==4.2.5

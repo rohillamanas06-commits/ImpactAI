@@ -9,7 +9,12 @@ Swap points for GROQ_API_KEY / ANTHROPIC_API_KEY (already in config/.env) are
 noted inline if you want to split vision vs. narrative-writing across
 providers later.
 """
+import asyncio
 import json
+import logging
+import tempfile
+from pathlib import Path
+from typing import Optional
 
 import httpx
 from google import genai
@@ -18,9 +23,13 @@ from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 from app.config import settings
 
+logger = logging.getLogger("impactai.ai")
+
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 _retry = retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8))
+
+_INLINE_VIDEO_MAX_BYTES = 20 * 1024 * 1024  # 20 MB
 
 
 async def _download_bytes(url: str) -> tuple[bytes, str]:
@@ -45,6 +54,17 @@ media platform. Look at this field photo and return ONLY a JSON object with this
 }
 Be concise and factual. Do not invent specific place names you cannot see in the image."""
 
+VIDEO_PROMPT = """You are an evidence-analysis assistant for an NGO / sustainability impact
+media platform. Watch this field video recording and return ONLY a JSON object with this exact shape:
+{
+  "description": "one to three sentence comprehensive description of the actions, environment, and progress visible across the video duration",
+  "tags": ["short", "lowercase", "keyword", "tags"],
+  "signals": ["environmental or impact-relevant signals, e.g. plastic waste, vegetation, construction, flowing water, volunteers, reforestation"],
+  "location_guess": "short guess of the setting/location type, or null if unclear (e.g. 'riverbank', 'mangrove swamp', 'urban street')",
+  "activity_guess": "short guess of the activity taking place across the video, or null if unclear (e.g. 'cleanup drive', 'tree planting', 'canal dredging')"
+}
+Be concise, accurate, and factual. Focus on impact and environmental evidence."""
+
 
 @_retry
 async def _analyze_image_url(image_url: str, is_video_frame: bool = False) -> dict:
@@ -59,7 +79,7 @@ async def _analyze_image_url(image_url: str, is_video_frame: bool = False) -> di
     )
     result = json.loads(response.text)
     if is_video_frame:
-        result["note"] = "Analysis derived from a representative video frame, not the full clip."
+        result["note"] = "Analysis derived from video thumbnail frame."
     return result
 
 
@@ -68,6 +88,73 @@ async def analyze_image_url(image_url: str, is_video_frame: bool = False) -> dic
         return await _analyze_image_url(image_url, is_video_frame)
     except RetryError as exc:
         raise RuntimeError(f"AI service unavailable after retries: {exc.last_attempt.exception()}") from exc
+
+
+async def _upload_video_to_files_api(video_bytes: bytes, mime_type: str) -> types.File:
+    """Upload large video bytes to Gemini Files API and poll until ready."""
+    suffix = ".mp4" if "mp4" in mime_type else ".mov" if "quicktime" in mime_type else ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(video_bytes)
+        tmp_path = tmp.name
+
+    try:
+        uploaded = await asyncio.to_thread(
+            client.files.upload,
+            file=tmp_path,
+            mime_type=mime_type,
+        )
+        # Poll until active
+        while uploaded.state == types.FileState.PROCESSING:
+            await asyncio.sleep(2)
+            uploaded = await asyncio.to_thread(client.files.get, name=uploaded.name)
+        if uploaded.state == types.FileState.FAILED:
+            raise RuntimeError(f"Gemini video processing failed: {uploaded.error}")
+        return uploaded
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+@_retry
+async def _analyze_video_bytes(video_bytes: bytes, mime_type: str = "video/mp4") -> dict:
+    """Run native multimodal video understanding using Gemini."""
+    if len(video_bytes) <= _INLINE_VIDEO_MAX_BYTES:
+        response = await client.aio.models.generate_content(
+            model=settings.GEMINI_VISION_MODEL,
+            contents=[
+                VIDEO_PROMPT,
+                types.Part.from_bytes(data=video_bytes, mime_type=mime_type),
+            ],
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+    else:
+        uploaded_file = await _upload_video_to_files_api(video_bytes, mime_type)
+        try:
+            response = await client.aio.models.generate_content(
+                model=settings.GEMINI_VISION_MODEL,
+                contents=[
+                    VIDEO_PROMPT,
+                    uploaded_file,
+                ],
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+        finally:
+            try:
+                await asyncio.to_thread(client.files.delete, name=uploaded_file.name)
+            except Exception:
+                pass
+
+    result = json.loads(response.text)
+    result["video_analysis_mode"] = "gemini_multimodal_native"
+    return result
+
+
+async def analyze_video(video_bytes: bytes, mime_type: str = "video/mp4") -> dict:
+    """Full native Gemini video analysis across the complete video duration."""
+    try:
+        return await _analyze_video_bytes(video_bytes, mime_type)
+    except Exception as exc:
+        logger.warning(f"Native video analysis failed, error: {exc}")
+        raise
 
 
 # ============================================================

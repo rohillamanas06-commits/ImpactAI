@@ -27,6 +27,7 @@ logger = logging.getLogger("impactai.webhooks")
 router = APIRouter(prefix="/webhooks", tags=["Meta WhatsApp / Instagram"])
 
 VERIFY_TOKEN_DEFAULT = "impactai_meta_webhook_secret_2025"
+META_GRAPH_API_BASE = "https://graph.facebook.com/v20.0"
 
 
 # ============================================================
@@ -42,7 +43,12 @@ async def verify_whatsapp_webhook(
     Standard Meta Cloud API verification challenge.
     When configured in Meta App Dashboard, Meta sends a GET request to verify the endpoint.
     """
-    if hub_mode == "subscribe" and hub_verify_token in [VERIFY_TOKEN_DEFAULT, "impactai_secret", settings.API_KEY]:
+    if hub_mode == "subscribe" and hub_verify_token in [
+        VERIFY_TOKEN_DEFAULT,
+        settings.WHATSAPP_VERIFY_TOKEN,
+        "impactai_secret",
+        settings.API_KEY,
+    ]:
         logger.info("Meta WhatsApp webhook verified successfully!")
         return Response(content=hub_challenge, media_type="text/plain", status_code=200)
 
@@ -54,15 +60,85 @@ async def verify_whatsapp_webhook(
 
 
 # ============================================================
-# 2. WhatsApp Ingestion Helper
+# 2. Real Meta Graph API Helpers
+# ============================================================
+async def _send_whatsapp_reply(to_phone: str, text: str) -> bool:
+    """
+    Send an official WhatsApp message back to the sender via Meta Graph API.
+    Gracefully logs and returns False if phone_id or token are not configured.
+    """
+    if not settings.WHATSAPP_PHONE_NUMBER_ID or not settings.WHATSAPP_ACCESS_TOKEN:
+        logger.info(f"WhatsApp credentials not configured; skipping outbound reply to {to_phone}")
+        return False
+
+    url = f"{META_GRAPH_API_BASE}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone,
+        "type": "text",
+        "text": {"preview_url": False, "body": text},
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code in [200, 201]:
+                logger.info(f"Outbound WhatsApp reply dispatched to {to_phone}")
+                return True
+            logger.warning(f"Meta WhatsApp reply API returned {resp.status_code}: {resp.text}")
+            return False
+    except Exception as exc:
+        logger.error(f"Failed sending WhatsApp reply: {exc}")
+        return False
+
+
+async def _download_meta_media(media_id: str) -> tuple[Optional[bytes], Optional[str]]:
+    """
+    Given a Meta Cloud API media_id, fetches the temporary download URL from Meta
+    using Authorization: Bearer {WHATSAPP_ACCESS_TOKEN}, then downloads the media content.
+    Returns: (media_bytes, mime_type)
+    """
+    if not settings.WHATSAPP_ACCESS_TOKEN:
+        return None, None
+
+    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. Query Meta Graph API for media details & download URL
+            url_resp = await client.get(f"{META_GRAPH_API_BASE}/{media_id}", headers=headers)
+            url_resp.raise_for_status()
+            data = url_resp.json()
+            download_url = data.get("url")
+            mime_type = data.get("mime_type", "image/jpeg")
+
+            if not download_url:
+                return None, None
+
+            # 2. Download the binary stream with authorization
+            media_resp = await client.get(download_url, headers=headers)
+            media_resp.raise_for_status()
+            return media_resp.content, mime_type
+    except Exception as exc:
+        logger.error(f"Failed to retrieve Meta media {media_id}: {exc}")
+        return None, None
+
+
+# ============================================================
+# 3. WhatsApp Ingestion Helper
 # ============================================================
 async def _process_whatsapp_evidence(
     sender_phone: str,
     sender_name: Optional[str],
     caption: str,
-    media_url: Optional[str],
-    project_id: Optional[uuid.UUID],
-    db: AsyncSession,
+    media_url: Optional[str] = None,
+    media_bytes: Optional[bytes] = None,
+    mime_type: Optional[str] = None,
+    project_id: Optional[uuid.UUID] = None,
+    db: AsyncSession = None,
 ) -> tuple[Optional[Media], str]:
     """
     Downloads media, uploads to Cloudinary, extracts EXIF/GPS, runs AI analysis,
@@ -91,36 +167,58 @@ async def _process_whatsapp_evidence(
     if not target_project:
         return None, "⚠️ Received evidence, but no active project was found in ImpactAI to attach it to. Please create a project first."
 
-    # 2. Process image/media
-    # Default sample image if none provided
+    # 2. Acquire media bytes
     sample_fallback_url = "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1200&q=80"
-    active_media_url = media_url or sample_fallback_url
+    content_bytes = media_bytes
+    content_mime = mime_type or "image/jpeg"
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(active_media_url)
-            resp.raise_for_status()
-            image_bytes = resp.content
-    except Exception as exc:
-        logger.error(f"Failed downloading WhatsApp media: {exc}")
-        return None, f"⚠️ Could not download media from {active_media_url}: {exc}"
+    if content_bytes is None:
+        active_media_url = media_url or sample_fallback_url
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(active_media_url)
+                resp.raise_for_status()
+                content_bytes = resp.content
+                content_mime = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+        except Exception as exc:
+            logger.error(f"Failed downloading WhatsApp media: {exc}")
+            return None, f"⚠️ Could not download media from {active_media_url}: {exc}"
 
-    # Extract EXIF & GPS
-    exif_data, lat, lon = extract_exif_and_gps(image_bytes)
+    is_video = content_mime.startswith("video/")
+    resource_type = "video" if is_video else "image"
+    ext = "mp4" if is_video else "jpg"
+
+    # Extract EXIF & GPS if image
+    exif_data, lat, lon = ({}, None, None)
+    if not is_video:
+        exif_data, lat, lon = extract_exif_and_gps(content_bytes)
 
     # Upload to Cloudinary
     upload_result = await cloudinary_service.upload_media(
-        image_bytes,
-        filename=f"whatsapp_{sender_phone[-4:]}_{uuid.uuid4().hex[:6]}.jpg",
+        content_bytes,
+        filename=f"whatsapp_{sender_phone[-4:]}_{uuid.uuid4().hex[:6]}.{ext}",
         folder=f"impactai/{target_project.id}/whatsapp",
     )
 
+    public_id = upload_result["public_id"]
     secure_url = upload_result["secure_url"]
+    transformations = {}
 
-    # AI Analysis via Gemini
+    if is_video:
+        thumb_url = cloudinary_service.build_video_thumbnail_url(public_id)
+        transformations["thumbnail_extraction"] = {"start_offset": "1", "width": 1000, "crop": "limit"}
+        transformations["video_analysis_mode"] = "gemini_multimodal_native"
+    else:
+        thumb_url = secure_url
+
+    # AI Analysis via Gemini (native video understanding for video, vision for image)
     try:
-        ai_res = await ai_service.analyze_image_url(secure_url)
-    except Exception:
+        if is_video:
+            ai_res = await ai_service.analyze_video(content_bytes, content_mime)
+        else:
+            ai_res = await ai_service.analyze_image_url(secure_url)
+    except Exception as exc:
+        logger.warning(f"AI analysis during WhatsApp ingestion encountered error: {exc}")
         ai_res = {
             "description": caption or "Field evidence submitted via WhatsApp",
             "tags": ["field-submission", "whatsapp"],
@@ -147,12 +245,12 @@ async def _process_whatsapp_evidence(
     media_obj = Media(
         project_id=target_project.id,
         cloudinary_public_id=upload_result["public_id"],
-        cloudinary_resource_type="image",
+        cloudinary_resource_type=resource_type,
         secure_url=secure_url,
-        thumbnail_url=secure_url,
-        original_filename=f"whatsapp_evidence_{sender_phone[-4:]}.jpg",
-        format=upload_result.get("format", "jpg"),
-        size_bytes=upload_result.get("bytes", len(image_bytes)),
+        thumbnail_url=thumb_url,
+        original_filename=f"whatsapp_evidence_{sender_phone[-4:]}.{ext}",
+        format=upload_result.get("format", ext),
+        size_bytes=upload_result.get("bytes", len(content_bytes)),
         latitude=lat,
         longitude=lon,
         exif_data=exif_data,
@@ -162,6 +260,7 @@ async def _process_whatsapp_evidence(
         tags=ai_res.get("tags") or ["whatsapp", "field-evidence"],
         signals=ai_res.get("signals") or ["verified-evidence"],
         ai_raw_response=ai_res,
+        transformations=transformations or None,
         embedding=embedding,
     )
     db.add(media_obj)
@@ -182,13 +281,15 @@ async def _process_whatsapp_evidence(
 
 
 # ============================================================
-# 3. Live WhatsApp Webhook Event Receiver (POST)
+# 4. Live WhatsApp Webhook Event Receiver (POST)
 # ============================================================
 @router.post("/whatsapp")
 async def receive_whatsapp_event(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Meta Cloud API Webhook event receiver.
-    Receives incoming WhatsApp messages from field workers, extracts media, and processes it.
+    Receives incoming WhatsApp messages from field workers, extracts media,
+    downloads directly from Meta CDN via Graph API, runs AI analysis, and sends back
+    an automated confirmation via WhatsApp.
     """
     try:
         body = await request.json()
@@ -211,13 +312,20 @@ async def receive_whatsapp_event(request: Request, db: AsyncSession = Depends(ge
                 msg_type = msg.get("type")
 
                 caption = ""
+                media_bytes = None
+                media_mime = None
                 media_url = None
 
-                if msg_type == "image":
-                    caption = msg.get("image", {}).get("caption", "")
-                    # Note: in production, Meta returns a media ID to download from Graph API.
-                    # If direct URL provided or fallback:
-                    media_url = msg.get("image", {}).get("url")
+                if msg_type in ["image", "video", "document"]:
+                    media_block = msg.get(msg_type, {})
+                    caption = media_block.get("caption", "")
+                    meta_media_id = media_block.get("id")
+                    if meta_media_id:
+                        # Real Meta media download via Bearer token
+                        media_bytes, media_mime = await _download_meta_media(meta_media_id)
+                    if not media_bytes:
+                        media_url = media_block.get("url")
+
                 elif msg_type == "text":
                     caption = msg.get("text", {}).get("body", "")
 
@@ -226,9 +334,15 @@ async def receive_whatsapp_event(request: Request, db: AsyncSession = Depends(ge
                     sender_name=sender_name,
                     caption=caption,
                     media_url=media_url,
+                    media_bytes=media_bytes,
+                    mime_type=media_mime,
                     project_id=None,
                     db=db,
                 )
+
+                # Send live WhatsApp reply back to field worker
+                if sender and sender != "unknown":
+                    await _send_whatsapp_reply(sender, reply)
 
                 # Log message record
                 log_entry = WhatsAppMessage(
@@ -251,7 +365,7 @@ async def receive_whatsapp_event(request: Request, db: AsyncSession = Depends(ge
 
 
 # ============================================================
-# 4. WhatsApp Simulator for Hackathon Testing & Demos
+# 5. WhatsApp Simulator for Hackathon Testing & Demos
 # ============================================================
 @router.post("/whatsapp/simulate", response_model=WhatsAppMessageOut)
 async def simulate_whatsapp_upload(payload: WhatsAppSimulateRequest, db: AsyncSession = Depends(get_db)):

@@ -11,9 +11,16 @@ export class ApiError extends Error {
   }
 }
 
+const TOKEN_KEY = 'impactai_token';
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  if (API_KEY) headers.set('X-API-Key', API_KEY);
+  const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  } else if (API_KEY) {
+    headers.set('X-API-Key', API_KEY);
+  }
   if (options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }

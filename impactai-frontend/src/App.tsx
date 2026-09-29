@@ -12,10 +12,12 @@ import { ProjectReportsPage } from './pages/ProjectReportsPage';
 import { ReportDetailPage } from './pages/ReportDetailPage';
 import { MediaDetailPage } from './pages/MediaDetailPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { AuthProvider } from './context/AuthContext';
 
 function App() {
   return (
-    <BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
       <Routes>
         <Route element={<RootLayout />}>
           <Route path="/" element={<ProjectsListPage />} />
@@ -34,6 +36,7 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
   );
 }
 

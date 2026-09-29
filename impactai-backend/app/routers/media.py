@@ -61,23 +61,36 @@ async def _process_single_file(
     if resource_type == "video":
         thumb_url = cloudinary_service.build_video_thumbnail_url(public_id)
         transformations["thumbnail_extraction"] = {"start_offset": "1", "width": 1000, "crop": "limit"}
-        analysis_target_url = thumb_url
+        transformations["video_analysis_mode"] = "gemini_multimodal_native"
+        try:
+            ai_result = await ai_service.analyze_video(content, content_type)
+        except Exception as video_exc:
+            # Graceful fallback to frame thumbnail analysis if full video analysis fails
+            try:
+                ai_result = await ai_service.analyze_image_url(thumb_url, is_video_frame=True)
+                ai_result["fallback_reason"] = str(video_exc)
+            except Exception as exc:
+                ai_result = {
+                    "description": None,
+                    "tags": [],
+                    "signals": [],
+                    "location_guess": None,
+                    "activity_guess": None,
+                    "error": str(exc),
+                }
     else:
         thumb_url = secure_url
-        analysis_target_url = secure_url
-
-
-    try:
-        ai_result = await ai_service.analyze_image_url(analysis_target_url, is_video_frame=(resource_type == "video"))
-    except Exception as exc:  # AI hiccup should never block the upload itself
-        ai_result = {
-            "description": None,
-            "tags": [],
-            "signals": [],
-            "location_guess": None,
-            "activity_guess": None,
-            "error": str(exc),
-        }
+        try:
+            ai_result = await ai_service.analyze_image_url(secure_url, is_video_frame=False)
+        except Exception as exc:
+            ai_result = {
+                "description": None,
+                "tags": [],
+                "signals": [],
+                "location_guess": None,
+                "activity_guess": None,
+                "error": str(exc),
+            }
 
     final_location = location or ai_result.get("location_guess")
     final_activity = activity or ai_result.get("activity_guess")
