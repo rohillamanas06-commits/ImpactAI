@@ -8,8 +8,9 @@ batches). Kept synchronous-per-request (no task queue) to stay simple for a
 hackathon timeline; see README for how to move this to a background worker.
 """
 import asyncio
+import mimetypes
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -41,10 +42,23 @@ async def _process_single_file(
     if size_mb > settings.MAX_UPLOAD_SIZE_MB:
         raise HTTPException(400, f"{file.filename} exceeds max upload size of {settings.MAX_UPLOAD_SIZE_MB}MB")
 
-    content_type = file.content_type or ""
-    allowed = settings.allowed_image_types_list + settings.allowed_video_types_list
-    if content_type not in allowed:
-        raise HTTPException(400, f"Unsupported file type for {file.filename}: {content_type}")
+    raw_ct = (file.content_type or "").split(";")[0].strip().lower()
+    if raw_ct in ("image/jpg", "image/pjpeg", "image/jfif"):
+        raw_ct = "image/jpeg"
+
+    if not raw_ct or raw_ct in ("application/octet-stream", "binary/octet-stream"):
+        guessed, _ = mimetypes.guess_type(file.filename or "")
+        if guessed:
+            raw_ct = guessed.lower()
+
+    allowed = set(settings.allowed_image_types_list + settings.allowed_video_types_list)
+    is_image = raw_ct.startswith("image/")
+    is_video = raw_ct.startswith("video/")
+
+    if not (is_image or is_video or raw_ct in allowed):
+        raise HTTPException(400, f"Unsupported file type for {file.filename}: {raw_ct or 'unknown'}")
+
+    content_type = raw_ct
 
     # Extract EXIF & GPS from raw bytes if image
     exif_data, exif_lat, exif_lon = ({}, None, None)
@@ -160,18 +174,39 @@ async def upload_media(
     files: List[UploadFile] = File(...),
     location: Optional[str] = Form(default=None),
     activity: Optional[str] = Form(default=None),
-    media_date: Optional[date] = Form(default=None),
-    latitude: Optional[float] = Form(default=None),
-    longitude: Optional[float] = Form(default=None),
+    media_date: Optional[str] = Form(default=None),
+    latitude: Optional[str] = Form(default=None),
+    longitude: Optional[str] = Form(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     project = await db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
 
+    parsed_date: Optional[date] = None
+    if media_date and media_date.strip():
+        try:
+            parsed_date = date.fromisoformat(media_date.strip())
+        except ValueError:
+            parsed_date = None
+
+    parsed_lat: Optional[float] = None
+    if latitude is not None and str(latitude).strip():
+        try:
+            parsed_lat = float(latitude)
+        except ValueError:
+            parsed_lat = None
+
+    parsed_lon: Optional[float] = None
+    if longitude is not None and str(longitude).strip():
+        try:
+            parsed_lon = float(longitude)
+        except ValueError:
+            parsed_lon = None
+
     # Process the batch concurrently (upload + AI analysis per file).
     media_objects = await asyncio.gather(
-        *[_process_single_file(f, project_id, location, activity, media_date, latitude, longitude) for f in files]
+        *[_process_single_file(f, project_id, location, activity, parsed_date, parsed_lat, parsed_lon) for f in files]
     )
 
     for m in media_objects:
