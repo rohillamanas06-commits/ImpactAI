@@ -35,11 +35,11 @@ ALGORITHM = "HS256"
 
 
 def _hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return pwd_context.hash(plain[:72])
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(plain[:72], hashed)
 
 
 def _create_access_token(user_id: uuid.UUID, expires_delta: Optional[timedelta] = None) -> str:

@@ -31,9 +31,9 @@ class Settings(BaseSettings):
 
     # ---------- Gemini ----------
     GEMINI_API_KEY: str
-    GEMINI_VISION_MODEL: str = "gemini-3.8-flash"
-    GEMINI_TEXT_MODEL: str = "gemini-3.8-flash"
-    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-2"
+    GEMINI_VISION_MODEL: str = "gemini-2.0-flash"
+    GEMINI_TEXT_MODEL: str = "gemini-2.0-flash"
+    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
 
     # ---------- Optional alternate providers ----------
     GROQ_API_KEY: str = ""
