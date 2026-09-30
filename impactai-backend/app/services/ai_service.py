@@ -98,15 +98,14 @@ async def _upload_video_to_files_api(video_bytes: bytes, mime_type: str) -> type
         tmp_path = tmp.name
 
     try:
-        uploaded = await asyncio.to_thread(
-            client.files.upload,
+        uploaded = await client.aio.files.upload(
             file=tmp_path,
-            mime_type=mime_type,
+            config=types.UploadFileConfig(mime_type=mime_type),
         )
         # Poll until active
         while uploaded.state == types.FileState.PROCESSING:
             await asyncio.sleep(2)
-            uploaded = await asyncio.to_thread(client.files.get, name=uploaded.name)
+            uploaded = await client.aio.files.get(name=uploaded.name)
         if uploaded.state == types.FileState.FAILED:
             raise RuntimeError(f"Gemini video processing failed: {uploaded.error}")
         return uploaded
@@ -139,7 +138,7 @@ async def _analyze_video_bytes(video_bytes: bytes, mime_type: str = "video/mp4")
             )
         finally:
             try:
-                await asyncio.to_thread(client.files.delete, name=uploaded_file.name)
+                await client.aio.files.delete(name=uploaded_file.name)
             except Exception:
                 pass
 
