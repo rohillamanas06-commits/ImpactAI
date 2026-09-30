@@ -1,16 +1,20 @@
 import { type ReactNode } from 'react';
 
 export function Modal({
+  isOpen = true,
   title,
   onClose,
   children,
   footer,
 }: {
+  isOpen?: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-shell/50 px-4">
       <div className="w-full max-w-lg rounded-lg border border-border bg-surface shadow-xl">

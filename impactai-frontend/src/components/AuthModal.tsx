@@ -46,11 +46,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <div className="flex border-b border-border">
           <button
             type="button"
-            className={`pb-2 text-sm font-medium transition-colors cursor-pointer mr-6 ${
-              tab === 'login'
+            className={`pb-2 text-sm font-medium transition-colors cursor-pointer mr-6 ${tab === 'login'
                 ? 'border-b-2 border-leaf text-ink font-semibold'
                 : 'text-ink-muted hover:text-ink'
-            }`}
+              }`}
             onClick={() => {
               setTab('login');
               setError(null);
@@ -60,11 +59,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </button>
           <button
             type="button"
-            className={`pb-2 text-sm font-medium transition-colors cursor-pointer ${
-              tab === 'register'
+            className={`pb-2 text-sm font-medium transition-colors cursor-pointer ${tab === 'register'
                 ? 'border-b-2 border-leaf text-ink font-semibold'
                 : 'text-ink-muted hover:text-ink'
-            }`}
+              }`}
             onClick={() => {
               setTab('register');
               setError(null);
